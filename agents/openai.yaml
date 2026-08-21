@@ -1,0 +1,7 @@
+interface:
+  display_name: "Remote Codex Provider Switch"
+  short_description: "Safely switch remote Codex accounts"
+  default_prompt: "Use $remote-codex-provider-switch to switch a remote Codex provider or account while preserving the current conversation history."
+
+policy:
+  allow_implicit_invocation: true
