@@ -2,9 +2,33 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Safely recover selected **local Codex tasks** after changing a Codex account,
-provider, machine, or SSH remote host—without moving credentials or rewriting
-Codex SQLite state.
+## In plain language
+
+If you run Codex locally and connect to Codex on a remote server over SSH, this
+skill helps you switch the remote account or compatible provider while keeping
+the local conversation history and context whenever possible.
+
+Think of it as **changing the fuel, not throwing away the car and starting
+over**. It supports the common combinations:
+
+- official OpenAI/ChatGPT account → official account
+- official account → compatible relay/provider
+- compatible relay/provider → official account
+- compatible relay/provider → another relay/provider
+
+It also covers switching accounts or providers in the same local Codex
+installation, and moving selected local tasks to another machine or SSH host.
+
+The old tasks must still exist in the source machine's `CODEX_HOME`. This skill
+cannot fetch local history that no longer exists from the cloud, and it never
+copies login credentials, API keys, or cookies.
+
+## What it actually does for you
+
+It finds which provider each old task expects and repairs the compatibility
+configuration after you confirm the exact mapping. When a machine or SSH host
+changes, it can package and restore only the selected tasks and attachments.
+It does not force recovery by directly rewriting Codex SQLite databases.
 
 The repository keeps the existing invocation name
 **remote-codex-provider-switch** so current installations keep working. The
