@@ -1,126 +1,145 @@
-# Remote Codex Provider Switch
+# Remote Codex Context Recovery
 
 English | [简体中文](README.zh-CN.md)
 
-Safely change the provider or account used by a Codex App Server reached through SSH while keeping the same desktop task, thread history, and continuation context.
+Safely recover selected **local Codex tasks** after changing a Codex account,
+provider, machine, or SSH remote host—without moving credentials or rewriting
+Codex SQLite state.
 
-Think of it as changing fuel while the vehicle keeps driving:
+The repository keeps the existing invocation name
+**remote-codex-provider-switch** so current installations keep working. The
+workflow has been substantially corrected: it no longer claims that editing
+rollout metadata or SQLite can safely make any old conversation continue under
+another account.
 
-```text
-desktop Codex -> SSH -> remote Codex App Server
-                         source provider/account
-                                  ↓ switch
-                         target provider/account
-```
+## What it does
 
-The source and target can be any combination:
+- inventories local Codex JSONL task files without printing task contents;
+- packages explicitly selected tasks, unambiguous index records, integrity
+  metadata, and optionally only known task-scoped attachments;
+- restores a verified bundle only into a clean, stopped target CODEX_HOME;
+- detects a legacy provider ID and can add a narrow non-secret compatibility
+  alias after the user confirms the source-to-target mapping;
+- uses the installed Codex CLI's supported migration path as a separate,
+  user-approved visibility check.
 
-- official account -> official account
-- official account -> relay
-- relay -> official account
-- relay -> relay
+An SSH host has its own local CODEX_HOME. The desktop's task store,
+authentication, and provider settings are independent of the remote host's
+store. Run the helper on the host that owns the task files, or use a
+user-approved secure mount.
 
-## Why This Exists
+~~~text
+desktop Codex  <->  SSH remote Codex host  ->  remote CODEX_HOME
+local CODEX_HOME                              remote task history
+~~~
 
-The desktop Codex installation and the remote SSH installation are separate runtimes. Changing the desktop configuration does not necessarily change the remote App Server. Likewise, a successful remote login does not prove that existing conversations or future turns use the newly selected account.
+## What it deliberately does not do
 
-Provider state can be present simultaneously in:
+- move ChatGPT cloud conversations, subscriptions, account ownership, login
+  state, auth.json, API keys, cookies, or a complete source config.toml;
+- directly edit state/history SQLite databases or hand-rewrite JSONL rollouts;
+- merge into an existing target task store, overwrite a task, or copy all
+  attachments found on disk;
+- infer a provider mapping from a name, endpoint, or account label;
+- send a test prompt merely to prove recovery or routing;
+- promise that a target account can natively continue every provider-specific
+  legacy history.
 
-- `~/.codex/config.toml`
-- environment variables and process arguments
-- JSONL rollout/session metadata
-- later `session_meta` records inside old conversations
-- SQLite App Server state
-- the App Server's in-memory cache
+## Safe workflow
 
-This skill checks and migrates those layers without rebuilding conversations or silently sending a test request.
+1. Read [SKILL.md](SKILL.md) and the
+   [recovery protocol](references/recovery-protocol.md).
+2. Inventory the source and destination. Report only safe metadata such as
+   task IDs, JSONL validity, attachment coverage, index ambiguity, target task
+   count, and missing provider IDs.
+3. Route the case:
+   - For a **same-host account/provider switch**, retain the existing
+     CODEX_HOME. Do not bundle and restore it onto itself. Complete the normal
+     login on the intended account, repair only an explicitly confirmed legacy
+     provider alias if needed, then inspect migration eligibility.
+   - For a **new machine or remote host**, create and verify a selective
+     bundle on the source, transfer the plaintext bundle through a
+     user-approved private channel, and restore it only into a clean target.
+   - If no local task/archived session exists, this repository cannot retrieve
+     cloud-only history from a different ChatGPT account.
+4. Inspect the supported migration command before allowing it to write. If it
+   is unavailable or marks a task ineligible, preserve the verified bundle and
+   stop instead of touching SQLite.
 
-## What It Does
+## Commands
 
-- identifies the source and target provider/account;
-- verifies the effective remote route without `turn/start` or a test prompt;
-- creates a complete, timestamped backup before mutation;
-- preserves thread IDs, turn IDs, messages, tool output, project paths, and history bytes;
-- migrates provider metadata in rollout files and SQLite state;
-- detects later `session_meta` records that can restore stale provider state;
-- audits provider-specific response IDs and tool records before attempting compatibility conversion;
-- restarts only the target remote user's App Server/proxy processes;
-- verifies that the same desktop task still opens and that future continuation targets the new account;
-- optionally removes archived conversations, but only with explicit authorization and a verified backup;
-- restores from backup instead of deleting or recreating history when verification fails.
+Run the helper from the installed skill directory:
 
-## Important Distinction
+~~~bash
+python3 scripts/codex_account_recovery.py inventory \
+  --source /path/to/source/.codex \
+  --target /path/to/target/.codex \
+  --json
+~~~
 
-Preserving history and continuing history are related but different:
+Create and validate one private, credential-free bundle:
 
-1. The original task and all prior turns must remain readable.
-2. The target provider must accept the persisted history format for a new turn.
+~~~bash
+python3 scripts/codex_account_recovery.py bundle \
+  --source /path/to/source/.codex \
+  --output /private/staging/recovery-bundle \
+  --thread TASK_ID \
+  --include-attachments \
+  --apply \
+  --json
 
-Some relays write provider-specific IDs, encrypted reasoning items, or tool-call records. The skill uses a type-aware adapter only when the target contract is known. If an exact continuation is impossible, it keeps the complete history and reports the incompatibility instead of claiming success.
+python3 scripts/codex_account_recovery.py verify \
+  --bundle /private/staging/recovery-bundle \
+  --json
+~~~
+
+With the target Codex app server or Desktop closed, restore only to a dedicated
+empty target:
+
+~~~bash
+python3 scripts/codex_account_recovery.py restore \
+  --bundle /private/staging/recovery-bundle \
+  --target /path/to/target/.codex \
+  --thread TASK_ID \
+  --include-attachments \
+  --i-confirm-codex-is-closed \
+  --apply \
+  --json
+~~~
+
+Then use the target installation's supported migration check:
+
+~~~bash
+CODEX_HOME=/path/to/target/.codex \
+  codex migrate-rollouts --thread TASK_ID --json
+~~~
+
+Add --apply to that last command only after explicit approval. See
+[SKILL.md](SKILL.md) for the provider-alias command and decision rules.
 
 ## Installation
 
-Copy the skill directory into the user's Codex skills directory:
+The repository root is the skill directory. Install or copy it as:
 
-```text
+~~~text
 ~/.codex/skills/remote-codex-provider-switch/
-```
+~~~
 
-The directory must contain:
+It requires Python 3.11 or newer for the bundled helper. Codex detects
+new/changed skills automatically; restart the app if a newly installed skill
+does not appear.
 
-```text
-SKILL.md
-README.md
-README.zh-CN.md
-DESCRIPTION.md
-agents/openai.yaml
-references/operational-playbook.md
-```
+## Validation
 
-On Windows, the equivalent default location is:
+~~~bash
+python3 -m unittest discover -s tests -v
+~~~
 
-```text
-%USERPROFILE%\.codex\skills\remote-codex-provider-switch\
-```
-
-## Usage
-
-Inspect a remote connection without changing it:
-
-```text
-Use $remote-codex-provider-switch to inspect which provider/account the remote SSH Codex is actually using.
-```
-
-Perform an authorized switch while preserving the current task:
-
-```text
-Use $remote-codex-provider-switch to switch the remote Codex from the current provider/account to the target provider/account. Keep the same thread ID and complete history, make a backup first, do not send a test turn, and verify that continuation routes to the target.
-```
-
-For a relay or account snapshot, provide the real target configuration. Do not invent provider names, endpoints, API keys, or login commands.
-
-## Safety Model
-
-- Read-only inventory comes before every mutation.
-- Active turns must be stopped or allowed to finish before rollout edits.
-- JSONL files are changed through atomic replacement; unrelated bytes are preserved.
-- The skill never uses `turn/start` merely to test routing.
-- It never broadens a request from archived deletion to active-history deletion.
-- It never uses a broad `killall codex`; process ownership and exact PIDs are checked first.
-- Secrets are redacted from reports.
-- Every failed post-change verification stops further generation and triggers recovery from backup.
-
-## Documentation
-
-- [SKILL.md](SKILL.md): Codex skill entrypoint and invocation rules.
-- [简体中文 README](README.zh-CN.md): Chinese project overview and usage guide.
-- [Project descriptions and naming options](DESCRIPTION.md): copy-ready bilingual GitHub descriptions and name candidates.
-- [Operational playbook](references/operational-playbook.md): provider detection, migration, compatibility checks, archive handling, verification, and recovery.
-
-## Limitations
-
-This skill cannot make an incompatible provider accept a history format it does not support. It can preserve the original conversation and identify the blocking record, but exact continuation may require a provider-supported import format or a manually reconstructed context. It also does not determine billing, quota, or account entitlements beyond routing evidence visible on the configured host.
+The test suite includes selective attachment recovery, duplicate index
+handling, provider-alias restrictions, path traversal/symlink/hard-link
+rejection, byte-preserving JSON token remapping, rollback, and Windows manifest
+paths.
 
 ## License
 
-No license is declared in this skill directory yet. Add a repository license before publishing if redistribution terms are required.
+[MIT](LICENSE).

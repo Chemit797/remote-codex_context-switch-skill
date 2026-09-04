@@ -1,84 +1,67 @@
-# Project Description and Naming Options
+# Project Description
 
-This file contains copy-ready GitHub metadata in English and Simplified Chinese.
+## Recommended presentation
 
-## Recommended Name
+The existing public skill identifier remains:
 
-### Skill/repository name
+~~~text
+remote-codex-provider-switch
+~~~
 
-`remote-codex-provider-switch`
+Its user-facing purpose is now **Remote Codex Context Recovery**. Retaining the
+identifier avoids breaking existing installations while making the actual
+recovery boundary explicit.
 
-Why this is recommended:
-
-- clearly describes the remote SSH and provider-switching scope;
-- works for account-to-account and relay-to-relay changes;
-- easy to discover when users search for Codex provider or account switching;
-- matches the current skill folder and `$remote-codex-provider-switch` invocation.
-
-## GitHub Description
+## GitHub description
 
 ### English
 
-Safely switch remote Codex providers or accounts over SSH while preserving conversation history and continuation context.
+Safely recover selected local Codex tasks after an account, provider, machine,
+or SSH-host switch—without copying credentials or editing SQLite state.
 
 ### 简体中文
 
-通过 SSH 安全切换远端 Codex 的 provider 或账号，同时保留原有对话历史和继续对话上下文。
+在切换 Codex 账号、provider、机器或 SSH 远端主机后，安全恢复指定的本地任务；
+不复制凭据，也不修改 SQLite 状态。
 
-## Short Descriptions
+## Short descriptions
 
 ### English
 
-- Switch remote Codex providers without losing context.
-- Change Codex accounts over SSH while preserving threads.
-- Keep the same Codex task while changing its provider.
+- Recover local Codex tasks after an account switch.
+- Move selected Codex task files safely between hosts.
+- Repair a legacy provider ID without moving credentials.
 
 ### 简体中文
 
-- 远端切换 Codex provider，不丢失上下文。
-- SSH 切换 Codex 账号，保留原有对话。
-- 更换额度来源，继续使用同一个 Codex 任务。
+- 切换账号后安全恢复本地 Codex 任务。
+- 在主机之间安全迁移指定的 Codex 任务文件。
+- 不搬运凭据，修复旧任务的 provider ID。
 
-## Alternative Skill Names
+## Scope statement
 
-| Name | Best use | Tradeoff |
-| --- | --- | --- |
-| `remote-codex-provider-switch` | Recommended general-purpose name | Slightly technical, but precise |
-| `remote-codex-context-switch` | Emphasize preserving conversation context | Provider/account routing is less explicit |
-| `codex-ssh-account-switch` | Emphasize SSH and account changes | Less suitable for relay-to-relay provider changes |
-| `codex-context-migration` | Emphasize history migration and compatibility | Could be confused with migrating between machines |
-| `codex-fuel-switch` | Emphasize the “change fuel, keep driving” metaphor | Less discoverable and less formal for a public repository |
-| `remote-codex-routing` | Emphasize route and quota verification | Does not clearly promise history preservation |
+This skill handles local Codex task artifacts. A remote SSH host simply owns a
+separate local CODEX_HOME. It does not migrate ChatGPT cloud history,
+entitlements, subscriptions, account access, OAuth state, cookies, API keys,
+or arbitrary remote state databases.
 
-## Suggested GitHub Topics
+## Suggested GitHub topics
 
-```text
+~~~text
 codex
-remote-codex
-ssh
-provider-switch
+codex-skill
+conversation-recovery
 account-switch
-conversation-migration
+provider-switch
+ssh
+remote-codex
 context-preservation
-app-server
-chatgpt
-relay-provider
-```
+~~~
 
-## Suggested Repository Subtitle
+## Publishing notes
 
-### English
-
-Change the provider or account behind a remote SSH Codex session without replacing the conversation.
-
-### 简体中文
-
-更换远端 SSH Codex 会话背后的 provider 或账号，同时保留原有对话。
-
-## Publishing Notes
-
-- Keep `README.md` as the default English GitHub landing page.
-- Link `README.zh-CN.md` from the top of the English README.
-- Add a clear open-source license before publishing; no license is assumed here.
-- Do not publish real server IPs, usernames, API keys, relay URLs, session files, SQLite databases, or migration backups.
-- Do not include private conversation content in examples or screenshots.
+- Do not publish real task JSONL files, attachments, bundles, state databases,
+  authentication files, private provider endpoints, server addresses, or keys.
+- The bundle produced by the helper is plaintext conversation data. Keep it in
+  a private location and transfer it only via a user-approved private channel.
+- The repository includes an MIT license.

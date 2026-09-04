@@ -1,7 +1,7 @@
 interface:
-  display_name: "Remote Codex Provider Switch"
-  short_description: "Safely switch remote Codex accounts"
-  default_prompt: "Use $remote-codex-provider-switch to switch a remote Codex provider or account while preserving the current conversation history."
+  display_name: "Remote Codex Context Recovery"
+  short_description: "Safely recover local Codex tasks after account changes"
+  default_prompt: "Use $remote-codex-provider-switch to inventory and safely recover selected local Codex tasks after an account or remote-host change."
 
 policy:
   allow_implicit_invocation: true
