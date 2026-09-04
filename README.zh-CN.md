@@ -16,7 +16,7 @@
   已知且属于该任务的附件；
 - 只向关闭中的、干净的目标 CODEX_HOME 恢复已经验证的 bundle；
 - 检测旧任务中的 provider ID；只有用户明确确认源到目标的映射后，才可
-  添加受限的无密钥兼容别名；
+  添加受限的无密钥兼容别名，包括安全映射到 Codex 内置 `openai` provider；
 - 使用目标机器已安装 Codex CLI 的受支持迁移路径，单独进行需要授权的
   可见性检查。
 
@@ -67,6 +67,23 @@ python3 scripts/codex_account_recovery.py inventory \
   --target /path/to/target/.codex \
   --json
 ~~~
+
+用户明确确认旧 provider 到当前 provider 的映射后，可将旧任务映射到内置
+OpenAI provider：
+
+~~~bash
+python3 scripts/codex_account_recovery.py provider-alias \
+  --config /path/to/target/.codex/config.toml \
+  --legacy-provider LEGACY_ID \
+  --active-provider openai \
+  --apply \
+  --json
+
+codex doctor --json -c 'model_provider="LEGACY_ID"'
+~~~
+
+生成的别名不会读取凭据或写死 endpoint，而是复用目标安装当前的 ChatGPT 或
+API key 登录；顶层默认 provider 保持不变。
 
 创建并验证一个私密、无凭据的 bundle：
 
@@ -124,9 +141,9 @@ CODEX_HOME=/path/to/target/.codex \
 python3 -m unittest discover -s tests -v
 ~~~
 
-测试覆盖了选择性附件恢复、重复索引、provider 别名限制、路径穿越/符号链接/
-硬链接拒绝、保留 JSON 原始字节的 token 重映射、回滚，以及 Windows
-manifest 路径。
+测试覆盖了选择性附件恢复、重复索引、内置 OpenAI 别名、provider 别名限制、
+路径穿越/符号链接/硬链接拒绝、保留 JSON 原始字节的 token 重映射、回滚，
+以及 Windows manifest 路径。
 
 ## 许可证
 

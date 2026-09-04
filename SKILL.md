@@ -121,9 +121,25 @@ local CODEX_HOME                              remote task history
      --json
    ~~~
 
-   The helper copies only a small non-secret transport allowlist and leaves the
-   target's top-level model_provider unchanged. It refuses providers that rely
-   on secrets, static headers/query parameters, or an auth command.
+   `TARGET_ID` may be the built-in `openai` provider. In that case the helper
+   creates a minimal alias with `requires_openai_auth = true`, deliberately
+   omits `base_url`, and lets Codex use the target's current ChatGPT or API-key
+   login route. It does not inspect or copy authentication state. For a custom
+   target provider, the helper copies only a small non-secret transport
+   allowlist. It leaves the target's top-level `model_provider` unchanged and
+   refuses secret-bearing providers, static headers/query parameters, auth
+   commands, and non-OpenAI built-ins.
+
+   After applying an alias, validate configuration and authenticated routing
+   without sending a prompt:
+
+   ~~~bash
+   codex doctor --json -c 'model_provider="LEGACY_ID"'
+   ~~~
+
+   Judge the provider, config, and auth checks separately from unrelated
+   terminal warnings. If `codex doctor` is unavailable, inventory again and
+   reopen one affected task as the acceptance check.
 
 5. With the target Codex Desktop or App Server closed, restore selected files
    to a dedicated clean target:
@@ -158,7 +174,9 @@ local CODEX_HOME                              remote task history
 - **Task is absent from the sidebar:** inventory, restore collision-free raw
   files only when the target is clean, then use the supported migration check.
 - **Model provider ID is missing:** inventory provider IDs and add a narrow
-  alias only after the user confirms the mapping.
+  alias only after the user confirms the mapping. The built-in `openai`
+  provider is a supported target even though it has no explicit table in
+  `config.toml`.
 - **Attachment does not render:** package and restore with
   --include-attachments; do not recursively copy unrelated CODEX_HOME state.
 - **The old account's cloud history is absent locally:** explain the boundary

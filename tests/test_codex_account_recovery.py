@@ -203,7 +203,8 @@ class CodexAccountRecoveryTests(unittest.TestCase):
                 "--json",
             )
             self.assertTrue((bundle / "manifest.json").is_file())
-            self.assertEqual(stat.S_IMODE(bundle.stat().st_mode), 0o700)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(bundle.stat().st_mode), 0o700)
             self.assertFalse((bundle / "auth.json").exists())
             self.assertFalse((bundle / "config.toml").exists())
             run_tool("verify", "--bundle", str(bundle), "--json")
@@ -240,10 +241,11 @@ class CodexAccountRecoveryTests(unittest.TestCase):
             self.assertEqual(source_records[1]["payload"]["local_images"], [str(source_attachment)])
             self.assertEqual(target_records[2]["payload"]["message"], str(source_attachment))
             self.assertEqual(target_attachment.read_bytes(), source_attachment.read_bytes())
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o700)
-            self.assertEqual(stat.S_IMODE((target / "sessions").stat().st_mode), 0o700)
-            self.assertEqual(stat.S_IMODE(target_session.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(target_attachment.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o700)
+                self.assertEqual(stat.S_IMODE((target / "sessions").stat().st_mode), 0o700)
+                self.assertEqual(stat.S_IMODE(target_session.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(target_attachment.stat().st_mode), 0o600)
             self.assertEqual(json.loads(restored.stdout)["rewritten_attachment_references"], 1)
             self.assertIn(TASK_ID, (target / "session_index.jsonl").read_text(encoding="utf-8"))
             self.assertTrue(list(target.glob("session_index.jsonl.pre-codex-account-recovery-*.bak")) == [])
@@ -280,6 +282,74 @@ class CodexAccountRecoveryTests(unittest.TestCase):
                 expected=2,
             )
             self.assertIn("already exists", result.stderr)
+
+    def test_alias_can_target_builtin_openai_without_copying_an_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = root / "config.toml"
+            original = 'model_provider = "openai"\nmodel = "gpt-5.6-sol"\n'
+            config.write_text(original, encoding="utf-8")
+
+            dry_run = run_tool(
+                "provider-alias",
+                "--config",
+                str(config),
+                "--legacy-provider",
+                "codex",
+                "--active-provider",
+                "openai",
+                "--json",
+            )
+            dry_run_report = json.loads(dry_run.stdout.split("\nDry run only.", 1)[0])
+            self.assertEqual(dry_run_report["active_provider_kind"], "built-in")
+            self.assertFalse(dry_run_report["will_write"])
+            self.assertEqual(config.read_text(encoding="utf-8"), original)
+
+            applied = run_tool(
+                "provider-alias",
+                "--config",
+                str(config),
+                "--legacy-provider",
+                "codex",
+                "--active-provider",
+                "openai",
+                "--apply",
+                "--json",
+            )
+            report = json.loads(applied.stdout)
+            parsed = RECOVERY_MODULE.load_toml(config)
+            self.assertEqual(parsed["model_provider"], "openai")
+            self.assertEqual(
+                parsed["model_providers"]["codex"],
+                {
+                    "name": "OpenAI (legacy codex tasks)",
+                    "requires_openai_auth": True,
+                    "wire_api": "responses",
+                },
+            )
+            self.assertNotIn("base_url", parsed["model_providers"]["codex"])
+            backup = Path(report["backup"])
+            self.assertTrue(backup.is_file())
+            self.assertEqual(backup.read_text(encoding="utf-8"), original)
+
+    def test_alias_refuses_non_openai_builtin_targets(self) -> None:
+        for active in ("ollama", "lmstudio"):
+            with self.subTest(active=active), tempfile.TemporaryDirectory() as temporary:
+                config = Path(temporary) / "config.toml"
+                config.write_text(f'model_provider = "{active}"\n', encoding="utf-8")
+                result = run_tool(
+                    "provider-alias",
+                    "--config",
+                    str(config),
+                    "--legacy-provider",
+                    "codex",
+                    "--active-provider",
+                    active,
+                    "--apply",
+                    expected=2,
+                )
+                self.assertIn("does not use the target OpenAI login", result.stderr)
+                self.assertNotIn("[model_providers.codex]", config.read_text(encoding="utf-8"))
 
     def test_alias_refuses_provider_url_with_query_data(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -522,7 +592,12 @@ class CodexAccountRecoveryTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            os.symlink(outside, source / "attachments")
+            try:
+                os.symlink(outside, source / "attachments")
+            except OSError as exc:
+                if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("Windows symlink creation requires Developer Mode or elevated privileges")
+                raise
             rejected = run_tool("inventory", "--source", str(source), expected=2)
             self.assertIn("symlinked attachments directory", rejected.stderr)
 
@@ -535,7 +610,12 @@ class CodexAccountRecoveryTests(unittest.TestCase):
             outside = workspace / "outside-attachment"
             outside.write_text("must not escape the attachment root\n", encoding="utf-8")
             attachment.unlink()
-            os.symlink(outside, attachment)
+            try:
+                os.symlink(outside, attachment)
+            except OSError as exc:
+                if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("Windows symlink creation requires Developer Mode or elevated privileges")
+                raise
             rejected = run_tool(
                 "bundle",
                 "--source",

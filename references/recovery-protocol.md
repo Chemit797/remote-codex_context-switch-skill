@@ -71,6 +71,15 @@ or auth commands rather than copying a partial, broken alias. It also leaves
 the target's global `model_provider` untouched so new tasks keep their existing
 behavior.
 
+The built-in `openai` provider is the supported exception to the requirement
+for an explicit target table. When the confirmed target ID is exactly
+`openai`, the helper synthesizes only `name`, `requires_openai_auth = true`, and
+`wire_api = "responses"`. It intentionally omits `base_url`: Codex then selects
+the authenticated OpenAI route for the target installation's current ChatGPT
+or API-key login. This avoids hard-coding one account route and does not inspect
+`auth.json`. The helper refuses the other built-in providers because they do
+not establish an OpenAI-auth compatibility contract.
+
 The relevant Codex configuration rule is that `model_provider` names a
 provider ID from `model_providers`; provider-related keys belong in the
 user-level config, not a project config. See the
@@ -91,6 +100,9 @@ user-level config, not a project config. See the
    the bundle before restoring.
 4. Resolve provider compatibility only after the user confirms a concrete
    source-to-target mapping.
+   If the target is the built-in `openai` provider, use it directly as
+   `--active-provider openai`; do not add or override a reserved
+   `[model_providers.openai]` table.
 5. Run `restore --thread <id> --i-confirm-codex-is-closed --apply` (or make an
    explicit `--all-sessions` choice). The helper creates a backup of the target
    `session_index.jsonl` before adding entries, keeps recovery-data directories
@@ -102,6 +114,17 @@ user-level config, not a project config. See the
    current default home.
 7. Reopen one task in Desktop and confirm it renders. If it shows a provider
    error, re-run inventory; do not alter SQLite databases by hand.
+
+For a same-home provider repair that does not require restore, validate the
+new alias without sending a prompt:
+
+~~~bash
+codex doctor --json -c 'model_provider="LEGACY_ID"'
+~~~
+
+Confirm that config loading, the selected provider, and authentication are
+healthy. A failing overall result caused only by an unrelated terminal or
+environment check is not evidence that the alias failed.
 
 ## Rollback
 

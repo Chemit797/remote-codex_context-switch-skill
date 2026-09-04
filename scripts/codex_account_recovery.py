@@ -31,7 +31,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.11+ is documented.
     tomllib = None
 
 
-TOOL_VERSION = "1.2.0"
+TOOL_VERSION = "1.3.0"
 BUNDLE_FORMAT = "codex-account-recovery-bundle"
 BUNDLE_VERSION = 2
 UUID_RE = re.compile(
@@ -60,6 +60,11 @@ ALIAS_FIELDS = (
     "supports_websockets",
     "supports_standalone_web_search",
 )
+BUILTIN_OPENAI_ALIAS = {
+    "name": "OpenAI",
+    "requires_openai_auth": True,
+    "wire_api": "responses",
+}
 
 
 class RecoveryError(RuntimeError):
@@ -1577,7 +1582,13 @@ def toml_literal(value: Any) -> str:
     raise RecoveryError(f"Unsupported non-secret provider setting type: {type(value).__name__}")
 
 
-def provider_alias_block(legacy: str, active: str, active_table: dict[str, Any]) -> str:
+def provider_alias_block(
+    legacy: str,
+    active: str,
+    active_table: dict[str, Any],
+    *,
+    allow_implicit_openai_url: bool = False,
+) -> str:
     forbidden = [field for field in SENSITIVE_PROVIDER_FIELDS if field in active_table]
     if forbidden:
         raise RecoveryError(
@@ -1596,21 +1607,22 @@ def provider_alias_block(legacy: str, active: str, active_table: dict[str, Any])
         value = active_table.get(field)
         if isinstance(value, (str, bool, int, float)):
             copied[field] = value
-    if "base_url" not in copied:
+    if "base_url" not in copied and not allow_implicit_openai_url:
         raise RecoveryError(f"Active provider {active!r} has no base_url; refusing to create an alias.")
-    parsed_url = urlparse(copied["base_url"])
-    if (
-        parsed_url.scheme not in {"http", "https"}
-        or not parsed_url.hostname
-        or parsed_url.username
-        or parsed_url.password
-        or parsed_url.query
-        or parsed_url.fragment
-    ):
-        raise RecoveryError(
-            "Active provider base_url includes unsupported credentials, query data, or an invalid scheme; "
-            "configure the legacy provider manually instead."
-        )
+    if "base_url" in copied:
+        parsed_url = urlparse(copied["base_url"])
+        if (
+            parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.hostname
+            or parsed_url.username
+            or parsed_url.password
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
+            raise RecoveryError(
+                "Active provider base_url includes unsupported credentials, query data, or an invalid scheme; "
+                "configure the legacy provider manually instead."
+            )
     lines = [f"# Compatibility alias for legacy local tasks that record provider {legacy!r}.", f"[model_providers.{legacy}]"]
     for key, value in copied.items():
         lines.append(f"{key} = {toml_literal(value)}")
@@ -1635,15 +1647,32 @@ def command_provider_alias(args: argparse.Namespace) -> int:
         raise RecoveryError("model_providers is not a TOML table.")
     if legacy in providers:
         raise RecoveryError(f"Provider {legacy!r} already exists; refusing to alter it.")
-    active_table = providers.get(active)
-    if not isinstance(active_table, dict):
-        raise RecoveryError(f"Active target provider {active!r} was not found in {config}.")
-    block = provider_alias_block(legacy, active, active_table)
+    active_provider_kind = "configured"
+    allow_implicit_openai_url = False
+    if active == "openai":
+        active_provider_kind = "built-in"
+        allow_implicit_openai_url = True
+        active_table = dict(BUILTIN_OPENAI_ALIAS)
+    elif active in BUILTIN_PROVIDERS:
+        raise RecoveryError(
+            f"Built-in provider {active!r} does not use the target OpenAI login and cannot back a legacy alias."
+        )
+    else:
+        active_table = providers.get(active)
+        if not isinstance(active_table, dict):
+            raise RecoveryError(f"Active target provider {active!r} was not found in {config}.")
+    block = provider_alias_block(
+        legacy,
+        active,
+        active_table,
+        allow_implicit_openai_url=allow_implicit_openai_url,
+    )
     report = {
         "operation": "provider-alias",
         "config": str(config),
         "legacy_provider": legacy,
         "active_provider": active,
+        "active_provider_kind": active_provider_kind,
         "will_write": bool(args.apply),
         "copied_fields": [line.split(" =", 1)[0] for line in block.splitlines() if " =" in line],
     }
@@ -1702,7 +1731,11 @@ def build_parser() -> argparse.ArgumentParser:
     alias = subparsers.add_parser("provider-alias", help="Add a narrow non-secret legacy provider alias")
     alias.add_argument("--config", required=True, help="Target user-level config.toml")
     alias.add_argument("--legacy-provider", required=True, help="Provider ID recorded by legacy session(s)")
-    alias.add_argument("--active-provider", required=True, help="Existing compatible provider in target config")
+    alias.add_argument(
+        "--active-provider",
+        required=True,
+        help="Existing compatible provider in target config, or the built-in openai provider",
+    )
     alias.add_argument("--apply", action="store_true", help="Back up and append the compatibility alias")
     alias.add_argument("--json", action="store_true", help="Emit a machine-readable report")
     alias.set_defaults(func=command_provider_alias)

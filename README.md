@@ -19,7 +19,8 @@ another account.
   metadata, and optionally only known task-scoped attachments;
 - restores a verified bundle only into a clean, stopped target CODEX_HOME;
 - detects a legacy provider ID and can add a narrow non-secret compatibility
-  alias after the user confirms the source-to-target mapping;
+  alias after the user confirms the source-to-target mapping, including a
+  safe alias to Codex's built-in `openai` provider;
 - uses the installed Codex CLI's supported migration path as a separate,
   user-approved visibility check.
 
@@ -76,6 +77,24 @@ python3 scripts/codex_account_recovery.py inventory \
   --target /path/to/target/.codex \
   --json
 ~~~
+
+After the user confirms an exact legacy-to-current mapping, repair legacy
+tasks that should use the built-in OpenAI provider:
+
+~~~bash
+python3 scripts/codex_account_recovery.py provider-alias \
+  --config /path/to/target/.codex/config.toml \
+  --legacy-provider LEGACY_ID \
+  --active-provider openai \
+  --apply \
+  --json
+
+codex doctor --json -c 'model_provider="LEGACY_ID"'
+~~~
+
+The generated alias reuses the target installation's current ChatGPT or
+API-key login without reading credentials or hard-coding an endpoint. The
+top-level default provider remains unchanged.
 
 Create and validate one private, credential-free bundle:
 
@@ -136,9 +155,9 @@ python3 -m unittest discover -s tests -v
 ~~~
 
 The test suite includes selective attachment recovery, duplicate index
-handling, provider-alias restrictions, path traversal/symlink/hard-link
-rejection, byte-preserving JSON token remapping, rollback, and Windows manifest
-paths.
+handling, built-in OpenAI aliases, provider-alias restrictions, path
+traversal/symlink/hard-link rejection, byte-preserving JSON token remapping,
+rollback, and Windows manifest paths.
 
 ## License
 
