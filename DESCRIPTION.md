@@ -2,57 +2,60 @@
 
 ## Recommended presentation
 
-The existing public skill identifier remains:
+The public skill identifier stays:
 
 ~~~text
 remote-codex-provider-switch
 ~~~
 
-Its user-facing purpose is now **Remote Codex Context Recovery**. Retaining the
-identifier avoids breaking existing installations while making the actual
-recovery boundary explicit.
+Its user-facing purpose is **switching the account, API key, or relay behind
+Codex without losing conversations**. Retaining the identifier keeps existing
+installations working.
 
 ## GitHub description
 
 ### English
 
-Safely recover selected local Codex tasks after an account, provider, machine,
-or SSH-host switch—without copying credentials or editing SQLite state.
+Swap the Codex account, API key, or relay, locally or over SSH, without losing a
+conversation: a one-second read-only check, a safe key swap, and a playbook.
 
 ### 简体中文
 
-在切换 Codex 账号、provider、机器或 SSH 远端主机后，安全恢复指定的本地任务；
-不复制凭据，也不修改 SQLite 状态。
+给 Codex 换账号、API key 或中转站（本机或 SSH 远端），一条对话都不丢：
+一秒体检、安全换 key、逐场景操作手册。
 
 ## Short descriptions
 
 ### English
 
-- Recover local Codex tasks after an account switch.
-- Move selected Codex task files safely between hosts.
-- Repair a legacy provider ID without moving credentials.
+- Switch a Codex key or relay and keep every conversation.
+- Find out in one second what is in effect and whether the key works.
+- Swap an API key without a BOM, a broken auth.json, or a stale copy.
 
 ### 简体中文
 
-- 切换账号后安全恢复本地 Codex 任务。
-- 在主机之间安全迁移指定的 Codex 任务文件。
-- 不搬运凭据，修复旧任务的 provider ID。
+- 换 Codex 的 key 或中转站，保留全部对话。
+- 一秒看清当前什么在生效、key 好不好用。
+- 换 key 不再遇到 BOM、auth.json 损坏或旧 key 残留。
 
 ## Scope statement
 
-This skill handles local Codex task artifacts. A remote SSH host simply owns a
-separate local CODEX_HOME. It does not migrate ChatGPT cloud history,
-entitlements, subscriptions, account access, OAuth state, cookies, API keys,
-or arbitrary remote state databases.
+The skill changes only the credential (`auth.json`) and the route (`config.toml`)
+and keeps the provider IDs that saved tasks carry resolvable. A remote SSH host
+simply owns a separate `CODEX_HOME`. Moving tasks to another machine and
+repairing truncated rollouts remain available as advanced, rarely needed tools.
+It does not migrate ChatGPT cloud history, entitlements, subscriptions, account
+access, OAuth state or cookies.
 
 ## Suggested GitHub topics
 
 ~~~text
 codex
 codex-skill
-conversation-recovery
 account-switch
 provider-switch
+api-key
+relay
 ssh
 remote-codex
 context-preservation
@@ -62,6 +65,8 @@ context-preservation
 
 - Do not publish real task JSONL files, attachments, bundles, state databases,
   authentication files, private provider endpoints, server addresses, or keys.
-- The bundle produced by the helper is plaintext conversation data. Keep it in
-  a private location and transfer it only via a user-approved private channel.
+- Examples in the docs use placeholders (`RELAY`, `HOST`, `LAST5_OF_KEY`).
+- The bundle produced by the advanced helper is plaintext conversation data.
+  Keep it in a private location and transfer it only via a user-approved private
+  channel.
 - The repository includes an MIT license.

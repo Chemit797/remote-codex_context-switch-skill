@@ -1,187 +1,105 @@
-# Remote Codex Context Recovery
+# Remote Codex Context Switch
 
 English | [简体中文](README.zh-CN.md)
 
 ## In plain language
 
-If you run Codex locally and connect to Codex on a remote server over SSH, this
-skill helps you switch the remote account or compatible provider while keeping
-the local conversation history and context whenever possible.
+Switch the account, API key, or relay behind Codex, on your machine or on an SSH
+host, **without losing a single conversation**. Think of it as changing the fuel,
+not throwing away the car.
 
-Think of it as **changing the fuel, not throwing away the car and starting
-over**. It supports the common combinations:
+It covers every direction: official to official, official to relay, relay to
+official, and relay to another relay. In most cases the whole job is one new key
+and, at most, one line of `config.toml`. Your history stays exactly where it is.
 
-- official OpenAI/ChatGPT account → official account
-- official account → compatible relay/provider
-- compatible relay/provider → official account
-- compatible relay/provider → another relay/provider
+## What you get
 
-It also covers switching accounts or providers in the same local Codex
-installation, and moving selected local tasks to another machine or SSH host.
+- **`scripts/codex_fuel.py`** - a one-second, read-only report: which
+  `CODEX_HOME`, provider, endpoint and model are active; which key (last five
+  characters) is stored; which provider IDs your saved tasks carry and whether
+  each still resolves. `--probe` asks the provider whether it accepts the stored
+  key (a free `GET /models`); `--doctor` adds Codex's own verdict.
+- **`codex_fuel.py set-key`** - swaps the key safely: hidden prompt, strips BOMs,
+  backs up `auth.json`, writes through the official `codex login`, then re-checks.
+- **A playbook** ([references/playbook.md](references/playbook.md)) with the
+  exact steps for each switch, for Windows and for an SSH host.
+- **A symptom table** in [SKILL.md](SKILL.md): 401, "model not found", tasks
+  missing, a config that silently stops loading, and more.
+- **Advanced tools**, rarely needed: moving tasks to a new machine
+  ([advanced-recovery](references/advanced-recovery.md)) and repairing a
+  truncated task ([paginated-history-repair](references/paginated-history-repair.md)).
 
-The old tasks must still exist in the source machine's `CODEX_HOME`. This skill
-cannot fetch local history that no longer exists from the cloud, and it never
-copies login credentials, API keys, or cookies.
+## The model behind it
 
-## What it actually does for you
+| Layer | Lives in | A swap means |
+|---|---|---|
+| Credential | `auth.json` | new key or login |
+| Route | `config.toml` (`base_url`, `openai_base_url`, `model`) | new endpoint |
+| History | rollouts and `state_*.sqlite`, each task tagged with a provider ID | stays put; its tag must keep resolving |
 
-It finds which provider each old task expects and repairs the compatibility
-configuration after you confirm the exact mapping. When a machine or SSH host
-changes, it can package and restore only the selected tasks and attachments.
-It does not force recovery by directly rewriting Codex SQLite databases.
+Keep provider IDs stable and change only the credential and the route. An SSH
+host is a separate `CODEX_HOME` with its own `auth.json` and `config.toml`; run
+the check on the host that holds the tasks you care about.
 
-The repository keeps the existing invocation name
-**remote-codex-provider-switch** so current installations keep working. The
-workflow has been substantially corrected: it no longer claims that editing
-rollout metadata or SQLite can safely make any old conversation continue under
-another account.
+## Lessons this skill encodes
 
-## What it does
+- `codex login` does not validate the key. "Successfully logged in" proves
+  nothing; `--probe` does.
+- Piping a key from PowerShell into `codex login --with-api-key` stores it with an
+  invisible leading U+FEFF, so every request fails with 401. `set-key` avoids it
+  and `check` detects it.
+- The flag is `--with-api-key` (stdin), not `--api-key KEY`.
+- JSON has no comments. Commenting out the old key in `auth.json` breaks the file.
+  Keep old keys in a `.bak-*` file.
+- A `[model_providers.openai]` table stops the whole config from loading and
+  Codex quietly falls back to ChatGPT defaults. To send the built-in `openai`
+  provider through a relay use the top-level `openai_base_url`.
+- Changes get overwritten (an editor autosaving an old buffer, for one). Verify
+  with `--expect-tail`, do not assume.
+- Relays offer different model names; take `model` from the probe output.
 
-- inventories local Codex JSONL task files without printing task contents;
-- packages explicitly selected tasks, unambiguous index records, integrity
-  metadata, and optionally only known task-scoped attachments;
-- restores a verified bundle only into a clean, stopped target CODEX_HOME;
-- detects a legacy provider ID and can add a narrow non-secret compatibility
-  alias after the user confirms the source-to-target mapping, including a
-  safe alias to Codex's built-in `openai` provider;
-- uses the installed Codex CLI's supported migration path as a separate,
-  user-approved visibility check.
-
-An SSH host has its own local CODEX_HOME. The desktop's task store,
-authentication, and provider settings are independent of the remote host's
-store. Run the helper on the host that owns the task files, or use a
-user-approved secure mount.
-
-~~~text
-desktop Codex  <->  SSH remote Codex host  ->  remote CODEX_HOME
-local CODEX_HOME                              remote task history
-~~~
-
-## What it deliberately does not do
-
-- move ChatGPT cloud conversations, subscriptions, account ownership, login
-  state, auth.json, API keys, cookies, or a complete source config.toml;
-- directly edit state/history SQLite databases or hand-rewrite JSONL rollouts;
-- merge into an existing target task store, overwrite a task, or copy all
-  attachments found on disk;
-- infer a provider mapping from a name, endpoint, or account label;
-- send a test prompt merely to prove recovery or routing;
-- promise that a target account can natively continue every provider-specific
-  legacy history.
-
-## Safe workflow
-
-1. Read [SKILL.md](SKILL.md) and the
-   [recovery protocol](references/recovery-protocol.md).
-2. Inventory the source and destination. Report only safe metadata such as
-   task IDs, JSONL validity, attachment coverage, index ambiguity, target task
-   count, and missing provider IDs.
-3. Route the case:
-   - For a **same-host account/provider switch**, retain the existing
-     CODEX_HOME. Do not bundle and restore it onto itself. Complete the normal
-     login on the intended account, repair only an explicitly confirmed legacy
-     provider alias if needed, then inspect migration eligibility.
-   - For a **new machine or remote host**, create and verify a selective
-     bundle on the source, transfer the plaintext bundle through a
-     user-approved private channel, and restore it only into a clean target.
-   - If no local task/archived session exists, this repository cannot retrieve
-     cloud-only history from a different ChatGPT account.
-4. Inspect the supported migration command before allowing it to write. If it
-   is unavailable or marks a task ineligible, preserve the verified bundle and
-   stop instead of touching SQLite.
-
-## Commands
-
-Run the helper from the installed skill directory:
+## Quick start
 
 ~~~bash
-python3 scripts/codex_account_recovery.py inventory \
-  --source /path/to/source/.codex \
-  --target /path/to/target/.codex \
-  --json
+python scripts/codex_fuel.py --probe                 # what is in effect, and does the key work
+python scripts/codex_fuel.py set-key                 # new key: backup, write, re-check
+python scripts/codex_fuel.py --expect-tail ab12X --probe   # confirm the swap took effect
+ssh HOST python3 - --probe < scripts/codex_fuel.py   # same check on an SSH host, nothing to install
 ~~~
 
-After the user confirms an exact legacy-to-current mapping, repair legacy
-tasks that should use the built-in OpenAI provider:
+## What it does not do
 
-~~~bash
-python3 scripts/codex_account_recovery.py provider-alias \
-  --config /path/to/target/.codex/config.toml \
-  --legacy-provider LEGACY_ID \
-  --active-provider openai \
-  --apply \
-  --json
+- Recover ChatGPT cloud conversations, or transfer subscriptions, account
+  ownership, cookies or OAuth state.
+- Send a test prompt to prove a switch worked (it costs tokens and appends a turn).
+- Edit SQLite or rollout files as part of the normal flow. The two documented
+  exceptions need explicit approval and backups.
+- Guess an SSH alias, path or provider mapping.
 
-codex doctor --json -c 'model_provider="LEGACY_ID"'
-~~~
-
-The generated alias reuses the target installation's current ChatGPT or
-API-key login without reading credentials or hard-coding an endpoint. The
-top-level default provider remains unchanged.
-
-Create and validate one private, credential-free bundle:
-
-~~~bash
-python3 scripts/codex_account_recovery.py bundle \
-  --source /path/to/source/.codex \
-  --output /private/staging/recovery-bundle \
-  --thread TASK_ID \
-  --include-attachments \
-  --apply \
-  --json
-
-python3 scripts/codex_account_recovery.py verify \
-  --bundle /private/staging/recovery-bundle \
-  --json
-~~~
-
-With the target Codex app server or Desktop closed, restore only to a dedicated
-empty target:
-
-~~~bash
-python3 scripts/codex_account_recovery.py restore \
-  --bundle /private/staging/recovery-bundle \
-  --target /path/to/target/.codex \
-  --thread TASK_ID \
-  --include-attachments \
-  --i-confirm-codex-is-closed \
-  --apply \
-  --json
-~~~
-
-Then use the target installation's supported migration check:
-
-~~~bash
-CODEX_HOME=/path/to/target/.codex \
-  codex migrate-rollouts --thread TASK_ID --json
-~~~
-
-Add --apply to that last command only after explicit approval. See
-[SKILL.md](SKILL.md) for the provider-alias command and decision rules.
+Verified on Windows 11 with codex-cli 0.146.0 and 0.155.0-alpha.2.6. The SSH
+path, ChatGPT-to-ChatGPT login and `--device-auth` follow from the CLI's own
+help but were not exercised end to end; confirm them on first use.
 
 ## Installation
 
 The repository root is the skill directory. Install or copy it as:
 
 ~~~text
-~/.codex/skills/remote-codex-provider-switch/
+~/.codex/skills/remote-codex-provider-switch/     # Codex (reads agents/openai.yaml too)
+~/.claude/skills/remote-codex-provider-switch/    # Claude Code (reads SKILL.md directly)
 ~~~
 
-It requires Python 3.11 or newer for the bundled helper. Codex detects
-new/changed skills automatically; restart the app if a newly installed skill
-does not appear.
+`codex_fuel.py` needs Python 3.8 or newer and only the standard library. The
+history-moving helper needs Python 3.11 or newer. Codex picks up new or changed
+skills automatically; restart the app if a new skill does not appear. The
+identifier `remote-codex-provider-switch` is unchanged so existing installs keep
+working.
 
 ## Validation
 
 ~~~bash
 python3 -m unittest discover -s tests -v
 ~~~
-
-The test suite includes selective attachment recovery, duplicate index
-handling, built-in OpenAI aliases, provider-alias restrictions, path
-traversal/symlink/hard-link rejection, byte-preserving JSON token remapping,
-rollback, and Windows manifest paths.
 
 ## License
 

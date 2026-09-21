@@ -1,5 +1,10 @@
 # Recovery protocol
 
+Advanced path only: this is the contract behind moving tasks to a new machine,
+host, or clean `CODEX_HOME` (see [advanced-recovery](advanced-recovery.md)).
+Switching an account, key or relay in place does not use it; start from
+[SKILL.md](../SKILL.md).
+
 ## Scope and limits
 
 Codex rollout/session files are local artifacts. A new ChatGPT account can
