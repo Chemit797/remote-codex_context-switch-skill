@@ -82,12 +82,20 @@ help but were not exercised end to end; confirm them on first use.
 
 ## Installation
 
-The repository root is the skill directory. Install or copy it as:
+The repository root is the skill directory, and the folder name must match the
+skill name `remote-codex-provider-switch`, so clone into that name explicitly
+(a plain `git clone` would create `remote-codex_context-switch-skill`):
 
-~~~text
-~/.codex/skills/remote-codex-provider-switch/     # Codex (reads agents/openai.yaml too)
-~/.claude/skills/remote-codex-provider-switch/    # Claude Code (reads SKILL.md directly)
+~~~bash
+# Claude Code (reads SKILL.md directly)
+git clone https://github.com/Chemit797/remote-codex_context-switch-skill ~/.claude/skills/remote-codex-provider-switch
+# Codex (also reads agents/openai.yaml)
+git clone https://github.com/Chemit797/remote-codex_context-switch-skill ~/.codex/skills/remote-codex-provider-switch
 ~~~
+
+On Windows PowerShell use `$env:USERPROFILE\.claude\skills\remote-codex-provider-switch`
+(or `.codex\skills\...`) as the target. Update later with `git pull` inside that
+folder. Both clients pick the skill up automatically; restart if it does not appear.
 
 `codex_fuel.py` needs Python 3.8 or newer and only the standard library. The
 history-moving helper needs Python 3.11 or newer. Codex picks up new or changed

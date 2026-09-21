@@ -41,6 +41,20 @@ BUILTIN = {"openai", "ollama", "lmstudio"}
 AUTH_EXTRAS = ("experimental_bearer_token", "http_headers", "env_http_headers", "query_params", "auth")
 ENV_NAMES = ("OPENAI_API_KEY", "OPENAI_BASE_URL", "CODEX_API_KEY", "CODEX_HOME")
 
+try:
+    _SELF = Path(__file__).resolve()
+except NameError:  # piped on stdin: ssh HOST python3 - < codex_fuel.py
+    _SELF = None
+# When piped, __file__ may be "<stdin>" (newer Pythons) rather than missing.
+_HERE = _SELF.parent if _SELF is not None and _SELF.is_file() else None
+_PY = "python" if os.name == "nt" else "python3"
+
+
+def script_cmd(name, *args):
+    """A command line that works from any working directory."""
+    target = f'"{_HERE / name}"' if _HERE else f"scripts/{name}"
+    return " ".join([_PY, target, *args])
+
 
 def resolve_home(arg):
     return Path(arg or os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
@@ -347,15 +361,16 @@ def analyze(report, expect_tail=None):
             add("warn", f"active provider reads its key from env var {var}, which is not set in this shell",
                 "Export it in the shell/service that launches Codex; the desktop app may not inherit your terminal's environment.")
     elif not auth["exists"]:
-        add("warn", "no auth.json: Codex is not logged in", "python scripts/codex_fuel.py set-key")
+        add("warn", "no auth.json: Codex is not logged in", script_cmd("codex_fuel.py", "set-key"))
     elif auth.get("valid") is False:
         add("error", "auth.json is unusable: " + "; ".join(auth["problems"]),
-            "Restore auth.json.bak-*, or rewrite it with: python scripts/codex_fuel.py set-key")
+            "Restore auth.json.bak-*, or rewrite it with: " + script_cmd("codex_fuel.py", "set-key"))
     elif auth["problems"]:
-        add("warn", "auth.json: " + "; ".join(auth["problems"]), "Rewrite it with: python scripts/codex_fuel.py set-key (clean UTF-8, no BOM).")
+        add("warn", "auth.json: " + "; ".join(auth["problems"]),
+            "Rewrite it (clean UTF-8, no BOM) with: " + script_cmd("codex_fuel.py", "set-key"))
     if auth.get("key_clean") is False:
         add("error", "the stored key contains invisible or non-ASCII characters (typically U+FEFF from a key piped in through PowerShell), so every request will fail with 401",
-            "python scripts/codex_fuel.py set-key")
+            script_cmd("codex_fuel.py", "set-key"))
 
     if expect_tail:
         stored = (auth.get("key") or {}).get("tail")
@@ -390,7 +405,9 @@ def analyze(report, expect_tail=None):
             continue
         target = cfg["active_provider"]
         add("error", f"{count} tasks carry provider ID '{tag}', which config.toml does not define, so they cannot resume",
-            f"python scripts/codex_account_recovery.py provider-alias --config \"{cfg['path']}\" --legacy-provider {tag} --active-provider {target} --apply --json")
+            script_cmd("codex_account_recovery.py", "provider-alias", "--config", f'"{cfg["path"]}"', "--legacy-provider", tag,
+                       "--active-provider", target, "--apply", "--json")
+            + "   (needs Python 3.11+; otherwise add the table by hand, see references/playbook.md section F)")
 
     versions = {v["version"] for v in report["codex"] if v["version"] not in ("", "?")}
     if len(versions) > 1:
@@ -493,7 +510,7 @@ def clean_key(raw):
         text = raw.decode("utf-16", errors="replace")
     else:
         text = raw.decode("utf-8", errors="replace")
-    text = text.replace("﻿", "").replace("\x00", "").strip()
+    text = text.replace("\ufeff", "").replace("\x00", "").strip()
     if len(text) < 16 or not (text.isascii() and text.isprintable()) or any(c.isspace() for c in text):
         raise ValueError("that does not look like an API key (expected one printable ASCII token of at least 16 characters)")
     return text

@@ -1,7 +1,9 @@
 import importlib.util
 import io
 import json
+import subprocess
 import sqlite3
+import sys
 import tempfile
 import threading
 import unittest
@@ -182,15 +184,15 @@ class SetKeyTests(unittest.TestCase):
     def test_clean_key_strips_bom_utf16_and_whitespace(self):
         self.assertEqual(fuel.clean_key(b"\xef\xbb\xbf" + KEY_A.encode() + b"\r\n"), KEY_A)
         self.assertEqual(fuel.clean_key(KEY_A.encode("utf-16")), KEY_A)
-        self.assertEqual(fuel.clean_key(("﻿" + KEY_A + "\n").encode()), KEY_A)
+        self.assertEqual(fuel.clean_key(("\ufeff" + KEY_A + "\n").encode()), KEY_A)
 
     def test_clean_key_rejects_garbage(self):
-        for bad in (b"", b"short", b"has space inside 0123456789", "clé".encode() + b"0" * 20):
+        for bad in (b"", b"short", b"has space inside 0123456789", "cl\u00e9".encode() + b"0" * 20):
             with self.assertRaises(ValueError):
                 fuel.clean_key(bad)
 
     def test_key_with_hidden_bom_is_an_error(self):
-        report = run_report(make_home(RELAY_CONFIG, auth={"OPENAI_API_KEY": "﻿" + KEY_A}))
+        report = run_report(make_home(RELAY_CONFIG, auth={"OPENAI_API_KEY": "\ufeff" + KEY_A}))
         self.assertIs(report["auth"]["key_clean"], False)
         self.assertTrue(any(l == "error" and "invisible" in m for l, m in levels(report)))
 
@@ -227,6 +229,23 @@ class SetKeyTests(unittest.TestCase):
 
 
 class OutputTests(unittest.TestCase):
+    def test_script_source_is_pure_ascii_so_it_survives_any_locale_when_piped(self):
+        source = (ROOT / "scripts" / "codex_fuel.py").read_text(encoding="utf-8")
+        self.assertEqual([n for n, line in enumerate(source.splitlines(), 1) if not line.isascii()], [])
+
+    def test_runs_from_any_directory_and_piped_on_stdin_with_usable_fix_paths(self):
+        home = make_home(RELAY_CONFIG, auth={"OPENAI_API_KEY": KEY_A}, tags={"codex": 1})
+        script = ROOT / "scripts" / "codex_fuel.py"
+        elsewhere = tempfile.mkdtemp()
+        by_path = subprocess.run([sys.executable, str(script), "--home", str(home), "--json"],
+                                 cwd=elsewhere, capture_output=True, text=True)
+        piped = subprocess.run([sys.executable, "-", "--home", str(home), "--json"], input=script.read_text(encoding="utf-8"),
+                               cwd=elsewhere, capture_output=True, text=True)
+        for proc, expected in ((by_path, str(ROOT / "scripts" / "codex_account_recovery.py")), (piped, "scripts/codex_account_recovery.py")):
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            fixes = [f["fix"] for f in json.loads(proc.stdout)["findings"] if f["level"] == "error"]
+            self.assertTrue(any(expected in fix for fix in fixes), fixes)
+
     def test_json_and_text_output_never_contain_the_full_key(self):
         home = make_home(RELAY_CONFIG, auth={"OPENAI_API_KEY": KEY_A}, tags={"relay": 1})
         original = fuel.find_codex

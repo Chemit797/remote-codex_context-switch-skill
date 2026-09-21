@@ -143,6 +143,18 @@ python scripts/codex_account_recovery.py provider-alias \
   --config CH/config.toml --legacy-provider OLD_ID --active-provider ACTIVE_ID --apply
 ~~~
 
+The helper needs Python 3.11 or newer (Ubuntu 22.04 ships 3.10). Without it,
+append the table by hand, then check that it loads. This is exactly what the
+helper writes for a relay; for the official route drop `base_url`:
+
+~~~toml
+[model_providers.OLD_ID]
+name = "OLD_ID (legacy)"
+base_url = "https://RELAY/v1"      # the same URL as the active provider
+wire_api = "responses"
+requires_openai_auth = true
+~~~
+
 The alias table copies only non-secret transport fields from the active
 provider, or, with `--active-provider openai`, creates `requires_openai_auth =
 true` with no `base_url` so it follows the current official login (verified as a

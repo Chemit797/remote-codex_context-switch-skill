@@ -27,8 +27,12 @@ passes. `codex login` accepts any string, an editor can save an old buffer over
 
 ## 1. Diagnose (about a second, read-only)
 
-Paths below are relative to this skill's directory; use `python3` on Linux/macOS.
-This skill works the same whether it is loaded by Codex or by Claude Code.
+**Run every `scripts/...` command from this skill's directory** (the base directory
+shown when the skill loaded: `cd` there first) or give the script's full path. From
+any other directory `python scripts/codex_fuel.py` fails with "can't open file".
+Launcher: `python3` on Linux/macOS, `python` (or `py -3`) on Windows. The fix
+commands the check prints already carry full paths. Codex and Claude Code load this
+skill the same way.
 
 ~~~bash
 python scripts/codex_fuel.py            # --probe tests the key against the endpoint, --doctor adds Codex's own verdict
@@ -58,8 +62,14 @@ Back up before editing config: `cp config.toml config.toml.bak-$(date +%Y%m%d%H%
 
 `set-key` asks for the key at a hidden prompt, which an agent cannot answer. Either
 ask the user to run it in their own terminal (in Claude Code: type it after `!`), or,
-if they gave you the key, pipe it in: `printf '%s' "$KEY" | python scripts/codex_fuel.py set-key`
-(stdin is read automatically when it is not a terminal; from PowerShell it is safe too).
+if they gave you the key, pipe it in (stdin is read automatically when it is not a terminal):
+
+~~~bash
+printf '%s' "$KEY" | python3 scripts/codex_fuel.py set-key                      # bash
+~~~
+~~~powershell
+$k | python "<skill dir>\scripts\codex_fuel.py" set-key                         # PowerShell; BOM-safe
+~~~
 
 ## 3. Verify
 

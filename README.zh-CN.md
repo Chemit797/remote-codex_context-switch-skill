@@ -72,12 +72,19 @@ ssh HOST python3 - --probe < scripts/codex_fuel.py   # 在 SSH 远端做同样�
 
 ## 安装
 
-仓库根目录就是 skill 目录，安装或复制为：
+仓库根目录就是 skill 目录，文件夹名必须和 skill 名 `remote-codex-provider-switch` 一致，
+所以要显式指定克隆目标（直接 `git clone` 会得到 `remote-codex_context-switch-skill`）：
 
-~~~text
-~/.codex/skills/remote-codex-provider-switch/     # Codex（同时读取 agents/openai.yaml）
-~/.claude/skills/remote-codex-provider-switch/    # Claude Code（直接读取 SKILL.md）
+~~~bash
+# Claude Code（直接读取 SKILL.md）
+git clone https://github.com/Chemit797/remote-codex_context-switch-skill ~/.claude/skills/remote-codex-provider-switch
+# Codex（同时读取 agents/openai.yaml）
+git clone https://github.com/Chemit797/remote-codex_context-switch-skill ~/.codex/skills/remote-codex-provider-switch
 ~~~
+
+Windows PowerShell 下把目标写成 `$env:USERPROFILE\.claude\skills\remote-codex-provider-switch`
+（或 `.codex\skills\...`）。以后在该文件夹里 `git pull` 即可更新。两个客户端都会自动发现；
+没出现就重启。
 
 `codex_fuel.py` 需要 Python 3.8 及以上，只用标准库。搬历史任务的工具需要 Python 3.11 及以上。
 Codex 会自动发现新增或变更的 skill；没出现的话重启应用。标识符 `remote-codex-provider-switch`
